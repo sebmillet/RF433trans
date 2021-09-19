@@ -46,6 +46,10 @@
 
 extern DelayExec dx;
 
+byte dummy;
+
+void tx_by_id(void *data);
+
 #ifdef DEBUG
 
 static char serial_printf_buffer[80];
@@ -94,34 +98,20 @@ static void assert_failed(int line) {
 #define SIMULATE_BUSY_TX
 #define SIMULATE_TX_SEND
 
-  // Input (codes received from Sonoff telecommand)
-//#define CODE_IN_BTN_HAUT     0x00b94d24
-//#define CODE_IN_BTN_BAS      0x00b94d22
 
-    // Volet salon
-const byte sl1_open_code[] =  {0x40, 0xA2, 0xBB, 0xAE};
-#define ID_SL1_OPEN           10
-const byte sl1_close_code[] = {0x40, 0xA2, 0xBB, 0xAD};
-#define ID_SL1_CLOSE          11
-    // Volet salle à manger
-const byte sl2_open_code[] =  {0x40, 0x03, 0x89, 0x4D};
-#define ID_SL2_OPEN           20
-const byte sl2_close_code[] = {0x40, 0x03, 0x89, 0x4E};
-#define ID_SL2_CLOSE          21
-#define ID_SL2_CLOSE_PARTIAL  22
-    // Volet chambre
-const byte sl3_open_code[] =  {0x40, 0x78, 0x49, 0x5E};
-#define ID_SL3_OPEN           30
-const byte sl3_close_code[] = {0x40, 0x78, 0x49, 0x5D};
-#define ID_SL3_CLOSE          31
+// * ****** *
+// * SLATER *
+// * ****** *
 
 #define SLATER_IS_OPEN    0
 #define SLATER_IS_CLOSED  1
 #define SLATER_DEFAULT    SLATER_IS_OPEN
 
-#define SLATER_WHAT_UNDEF 255
-#define SLATER_WHAT_OPEN  0
-#define SLATER_WHAT_CLOSE 1
+#define SLATER_WHAT_UNDEF         255
+#define SLATER_WHAT_OPEN            0
+#define SLATER_WHAT_CLOSE           1
+#define SLATER_WHAT_CLOSE_PARTIAL   2
+#define SLATER_WHAT_STOP            3
 
 class Slater {
     protected:
@@ -140,13 +130,29 @@ void Slater::action(byte what) {
     status = (what == SLATER_WHAT_OPEN ? SLATER_IS_OPEN : SLATER_IS_CLOSED);
 }
 
-#define SLATERADF_LEN        4
+
+// * ********* *
+// * SLATERADF *
+// * ********* *
+
+#define SLATERADF_LEN                   4
+    // SLATERADF_MAX_DELAY_PARTIAL corresponds to a delay of 30 seconds. The
+    // below means, if a partial close order was sent since more than 30 seconds
+    // ago, then, ignore it.
+    // The second constant (SLATERADF_MIN_DELAY_PARTIAL corresponds to 2
+    // seconds) is also necessary to ignore two commands received in a short
+    // period of time, most often, due to Radio-Frequency signal duplication.
+#define SLATERADF_MAX_DELAY_PARTIAL 30000
+#define SLATERADF_MIN_DELAY_PARTIAL 2000
 class SlaterAdf : public Slater {
     private:
         static RfSend *tx;
 
         const byte *open_code;
         const byte *close_code;
+
+        unsigned long last_millis;
+        byte last_what;
 
     protected:
         virtual void action_child(byte what) override;
@@ -162,7 +168,9 @@ RfSend *SlaterAdf::tx = nullptr;
 SlaterAdf::SlaterAdf(byte len, const byte *arg_open_code,
         const byte *arg_close_code):
         open_code(arg_open_code),
-        close_code(arg_close_code) {
+        close_code(arg_close_code),
+        last_millis(0),
+        last_what(SLATER_WHAT_UNDEF) {
     assert(len == SLATERADF_LEN);
 
         // tx is a static member, we need create it once.
@@ -187,15 +195,86 @@ int simulate_tx_send(byte len, const byte *data) {
 #endif
 
 void SlaterAdf::action_child(byte what) {
-    assert(what == SLATER_WHAT_OPEN || what == SLATER_WHAT_CLOSE);
     const byte *pcode =
-        (what == SLATER_WHAT_OPEN ? open_code : close_code);
+        ((what == SLATER_WHAT_OPEN || what == SLATER_WHAT_STOP) ?
+         open_code : close_code);
+
+    unsigned long t = millis();
+    unsigned long d = t - last_millis;
+    last_millis = t;
+
+    serial_printf("t = %lu, d = %lu, last_what = %d, what = %d\n", t, d, last_what, what);
+
+    if (last_what != SLATER_WHAT_UNDEF && d >= SLATERADF_MIN_DELAY_PARTIAL
+            && d <= SLATERADF_MAX_DELAY_PARTIAL) {
+        if (what == SLATER_WHAT_STOP) {
+            if (last_what != SLATER_WHAT_CLOSE_PARTIAL)
+                what = SLATER_WHAT_UNDEF;
+        } else if (what == SLATER_WHAT_CLOSE_PARTIAL) {
+            if (last_what == SLATER_WHAT_CLOSE
+                    || last_what == SLATER_WHAT_CLOSE_PARTIAL) {
+                what = SLATER_WHAT_UNDEF;
+            }
+        }
+    } else {
+        if (what == SLATER_WHAT_STOP) {
+            what = SLATER_WHAT_UNDEF;
+        }
+    }
+
+    last_what = what;
+
+    serial_printf("what = %d\n", what);
+
+    if (what == SLATER_WHAT_UNDEF)
+        return;
+
 #ifdef SIMULATE_TX_SEND
     simulate_tx_send(SLATERADF_LEN, pcode);
 #else
     tx->send(SLATERADF_LEN, pcode);
 #endif
 }
+
+
+// * ********** *
+// * SLATERMETA *
+// * ********** *
+
+struct id_sched_t {
+    unsigned long delay;
+    byte id;
+};
+
+class SlaterMeta : public Slater {
+    private:
+        const byte n;
+        const id_sched_t *sched;
+
+    protected:
+        virtual void action_child(byte what) override;
+
+    public:
+        SlaterMeta(byte arg_n, const id_sched_t *arg_sched):
+            n(arg_n),
+            sched(arg_sched) { }
+        virtual ~SlaterMeta() { }
+};
+
+void SlaterMeta::action_child(byte what) {
+    unsigned long cumul_delay = 0;
+    for (byte i = 0; i < n; ++i) {
+        const id_sched_t *psched = &sched[i];
+        void *data = &dummy + psched->id;
+        cumul_delay += psched->delay;
+        dx.set_task(cumul_delay, tx_by_id, data, false);
+    }
+}
+
+
+// * **************** *
+// * MY DEVICES CODES *
+// * **************** *
 
 struct code_t {
     byte id;
@@ -205,6 +284,33 @@ struct code_t {
     byte delayed_action_id;
 };
 
+#define DELAY_AFTER_RF_RECV   1000
+
+  // Input (codes received from Sonoff telecommand)
+//#define CODE_IN_BTN_HAUT     0x00b94d24
+//#define CODE_IN_BTN_BAS      0x00b94d22
+
+    // Volet salon
+const byte sl1_open_code[] =  {0x40, 0xA2, 0xBB, 0xAE};
+#define ID_SL1_OPEN           10
+const byte sl1_close_code[] = {0x40, 0xA2, 0xBB, 0xAD};
+#define ID_SL1_CLOSE          15
+    // Volet salle à manger
+const byte sl2_open_code[] =  {0x40, 0x03, 0x89, 0x4D};
+#define ID_SL2_OPEN           20
+#define ID_SL2_STOP           21
+const byte sl2_close_code[] = {0x40, 0x03, 0x89, 0x4E};
+#define ID_SL2_CLOSE          25
+#define ID_SL2_CLOSE_PARTIAL  26
+    // Volet chambre
+const byte sl3_open_code[] =  {0x40, 0x78, 0x49, 0x5E};
+#define ID_SL3_OPEN           30
+const byte sl3_close_code[] = {0x40, 0x78, 0x49, 0x5D};
+#define ID_SL3_CLOSE          35
+
+#define ID_SLA_OPEN          100
+#define ID_SLA_CLOSE         101
+
 SlaterAdf *sl1 = new SlaterAdf(ARRAYSZ(sl1_open_code),
         sl1_open_code, sl1_close_code);
 SlaterAdf *sl2 = new SlaterAdf(ARRAYSZ(sl2_open_code),
@@ -212,18 +318,50 @@ SlaterAdf *sl2 = new SlaterAdf(ARRAYSZ(sl2_open_code),
 SlaterAdf *sl3 = new SlaterAdf(ARRAYSZ(sl3_open_code),
         sl3_open_code, sl3_close_code);
 
+const id_sched_t all_open[] = {
+    0,    ID_SL1_OPEN,
+    2000, ID_SL2_OPEN,
+    2000, ID_SL3_OPEN
+};
+SlaterMeta *sla_open = new SlaterMeta(ARRAYSZ(all_open), all_open);
+
+const id_sched_t all_close[] = {
+    0,    ID_SL1_CLOSE,
+    2000, ID_SL2_CLOSE_PARTIAL,
+    2000, ID_SL3_CLOSE
+};
+SlaterMeta *sla_close = new SlaterMeta(ARRAYSZ(all_close), all_close);
+
 code_t slater_codes[] = {
-    {ID_SL1_OPEN,           sl1, SLATER_WHAT_OPEN,     0, SLATER_WHAT_UNDEF},
-    {ID_SL1_CLOSE,          sl1, SLATER_WHAT_CLOSE,    0, SLATER_WHAT_UNDEF},
-    {ID_SL2_OPEN,           sl2, SLATER_WHAT_OPEN,     0, SLATER_WHAT_UNDEF},
-    {ID_SL2_CLOSE,          sl2, SLATER_WHAT_CLOSE,    0, SLATER_WHAT_UNDEF},
-    {ID_SL2_CLOSE_PARTIAL,  sl2, SLATER_WHAT_OPEN, 1650, SLATER_WHAT_CLOSE}, // FIXME
-    {ID_SL3_OPEN,           sl3, SLATER_WHAT_OPEN,     0, SLATER_WHAT_UNDEF},
-    {ID_SL3_CLOSE,          sl3, SLATER_WHAT_CLOSE,    0, SLATER_WHAT_UNDEF},
+    {ID_SL1_OPEN,          sl1,       SLATER_WHAT_OPEN,  0, SLATER_WHAT_UNDEF},
+    {ID_SL1_CLOSE,         sl1,       SLATER_WHAT_CLOSE, 0, SLATER_WHAT_UNDEF},
+    {ID_SL2_OPEN,          sl2,       SLATER_WHAT_OPEN,  0, SLATER_WHAT_UNDEF},
+    {ID_SL2_STOP,          sl2,       SLATER_WHAT_STOP,  0, SLATER_WHAT_UNDEF},
+    {ID_SL2_CLOSE,         sl2,       SLATER_WHAT_CLOSE, 0, SLATER_WHAT_UNDEF},
+    {ID_SL2_CLOSE_PARTIAL, sl2,       SLATER_WHAT_CLOSE_PARTIAL,
+        16500, ID_SL2_STOP},
+    {ID_SL3_OPEN,          sl3,       SLATER_WHAT_OPEN,  0, SLATER_WHAT_UNDEF},
+    {ID_SL3_CLOSE,         sl3,       SLATER_WHAT_CLOSE, 0, SLATER_WHAT_UNDEF},
+    {ID_SLA_OPEN,          sla_open,  SLATER_WHAT_UNDEF, 0, SLATER_WHAT_UNDEF},
+    {ID_SLA_CLOSE,         sla_close, SLATER_WHAT_UNDEF, 0, SLATER_WHAT_UNDEF}
 };
 
+void rf_recv_callback(void *data);
+void setup_register_callbacks(Track& track) {
+    track.register_callback(RF433ANY_ID_TRIBIT,
+            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00),
+            (void *)(&dummy + 1), rf_recv_callback, 2000);
+    track.register_callback(RF433ANY_ID_TRIBIT,
+            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00),
+            (void *)(&dummy + 2), rf_recv_callback, 2000);
+}
+
+
+// * **** *
+// * CODE *
+// * **** *
+
 Track track(PIN_RFINPUT);
-byte dummy;
 
 byte tx_is_busy = false;
 
@@ -277,18 +415,30 @@ void tx_by_id(void *data) {
     } else {
         code_t *psc = &slater_codes[idx];
         (psc->sl)->action(psc->what);
-        serial_printf("Exec done\n");
+
+        serial_printf("id: %d, idx: %d: exec done\n", id, idx);
         tx_clear_busy();
+
+        if (psc->delayed_action) {
+            void *deferred_data = &dummy + psc->delayed_action_id;
+            dx.set_task(psc->delayed_action, tx_by_id, deferred_data, false);
+            serial_printf("id: %d: delay: %lu: exec deferred\n",
+                    id, psc->delayed_action);
+        }
+
     }
 }
 
 void rf_recv_callback(void *data) {
     int n = (byte *)data - &dummy;
+    assert(n == 1 || n == 2);
+
     serial_printf("call of rf_recv_callback(): n = %d\n", (int)n);
+    delay(DELAY_AFTER_RF_RECV);
     if (n == 1) {
-//        tx();
+        tx_by_id(&dummy + ID_SLA_OPEN);
     } else if (n == 2) {
-//        tx();
+        tx_by_id(&dummy + ID_SLA_CLOSE);
     }
 }
 
@@ -312,16 +462,11 @@ void setup() {
     turn_led_off();
 
 //    tx_flo = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
-//            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650, 1300,
-//            0, 0, 0, 24000, 12);
+//            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
+//            1300, 0, 0, 0, 24000, 12);
 
     track.setopt_wait_free_433_before_calling_callbacks(true);
-    track.register_callback(RF433ANY_ID_TRIBIT,
-            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00),
-            (void *)(&dummy + 1), rf_recv_callback, 2000);
-    track.register_callback(RF433ANY_ID_TRIBIT,
-            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00),
-            (void *)(&dummy + 2), rf_recv_callback, 2000);
+    setup_register_callbacks(track);
 
     dx.activate();
 }
