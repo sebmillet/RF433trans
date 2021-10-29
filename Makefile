@@ -1,5 +1,5 @@
 ARDUINO_DIR = /usr/share/arduino
-ARDUINO_LIBS = RF433any RF433send DelayExec
+ARDUINO_LIBS = RF433recv RF433send DelayExec
 ARDMK_DIR = /home/sebastien/.arduino_mk
 
 # USER_LIB_PATH = /home/sebastien/travail/cpp/seb/arduino/libraries

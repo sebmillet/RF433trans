@@ -29,15 +29,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses>.
 */
 
-#define DEBUG
+//#define DEBUG
 
 #define PIN_RFINPUT  2
+#define INT_RFINPUT  0
+
 #define PIN_RFOUT    3
   // Comment the below line if you don't want a LED to show RF transmission is
   // underway.
 #define PIN_LED      LED_BUILTIN
 
-#include "RF433any.h"
+#include "RF433recv.h"
 #include "RF433send.h"
 #include "DelayExec.h"
 #include "serial_speed.h"
@@ -45,6 +47,7 @@
 #include <Arduino.h>
 
 extern DelayExec dx;
+RF_manager rf(PIN_RFINPUT, INT_RFINPUT);
 
 byte dummy;
 
@@ -190,6 +193,12 @@ int simulate_tx_send(byte len, const byte *data) {
         serial_printf(" %02X", data[i]);
     }
     serial_printf("\n");
+
+        // FIXME
+    Serial.print("tx(");
+    Serial.print(len);
+    Serial.print(")\n");
+
     return 1;
 }
 #endif
@@ -346,22 +355,51 @@ code_t slater_codes[] = {
     {ID_SLA_CLOSE,         sla_close, SLATER_WHAT_UNDEF, 0, SLATER_WHAT_UNDEF}
 };
 
-void rf_recv_callback(void *data);
-void setup_register_callbacks(Track& track) {
-    track.register_callback(RF433ANY_ID_TRIBIT,
-            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00),
-            (void *)(&dummy + 1), rf_recv_callback, 2000);
-    track.register_callback(RF433ANY_ID_TRIBIT,
-            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00),
-            (void *)(&dummy + 2), rf_recv_callback, 2000);
+void telecommand_otio_up(const BitVector *recorded) {
+    serial_printf("call of telecommand_otio_up()\n");
+    tx_by_id(&dummy + ID_SLA_OPEN);
+}
+
+void telecommand_otio_down(const BitVector *recorded) {
+    serial_printf("call of telecommand_otio_down()\n");
+    tx_by_id(&dummy + ID_SLA_CLOSE);
+}
+
+//void rf_recv_callback(void *data);
+void setup_register_callbacks() {
+//    track.register_callback(RF433ANY_ID_TRIBIT,
+//            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00),
+//            (void *)(&dummy + 1), rf_recv_callback, 2000);
+//    track.register_callback(RF433ANY_ID_TRIBIT,
+//            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00),
+//            (void *)(&dummy + 2), rf_recv_callback, 2000);
+
+
+        // OTIO (no rolling code, 32-bit)
+    rf.register_Receiver(
+        RFMOD_TRIBIT, // mod
+         6976, // initseq
+            0, // lo_prefix
+            0, // hi_prefix
+            0, // first_lo_ign
+          562, // lo_short
+         1258, // lo_long
+            0, // hi_short (0 => take lo_short)
+            0, // hi_long  (0 => take lo_long)
+          528, // lo_last
+         6996, // sep
+           32  // nb_bits
+    );
+    rf.register_callback(telecommand_otio_up, 2000,
+            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
+    rf.register_callback(telecommand_otio_down, 2000,
+            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00));
 }
 
 
 // * **** *
 // * CODE *
 // * **** *
-
-Track track(PIN_RFINPUT);
 
 byte tx_is_busy = false;
 
@@ -429,18 +467,18 @@ void tx_by_id(void *data) {
     }
 }
 
-void rf_recv_callback(void *data) {
-    int n = (byte *)data - &dummy;
-    assert(n == 1 || n == 2);
+//void rf_recv_callback(void *data) {
+//    int n = (byte *)data - &dummy;
+//    assert(n == 1 || n == 2);
 
-    serial_printf("call of rf_recv_callback(): n = %d\n", (int)n);
-    delay(DELAY_AFTER_RF_RECV);
-    if (n == 1) {
-        tx_by_id(&dummy + ID_SLA_OPEN);
-    } else if (n == 2) {
-        tx_by_id(&dummy + ID_SLA_CLOSE);
-    }
-}
+//    serial_printf("call of rf_recv_callback(): n = %d\n", (int)n);
+//    delay(DELAY_AFTER_RF_RECV);
+//    if (n == 1) {
+//        tx_by_id(&dummy + ID_SLA_OPEN);
+//    } else if (n == 2) {
+//        tx_by_id(&dummy + ID_SLA_CLOSE);
+//    }
+//}
 
 void turn_led_on() {
 #ifdef PIN_LED
@@ -465,8 +503,8 @@ void setup() {
 //            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
 //            1300, 0, 0, 0, 24000, 12);
 
-    track.setopt_wait_free_433_before_calling_callbacks(true);
-    setup_register_callbacks(track);
+//    track.setopt_wait_free_433_before_calling_callbacks(true);
+    setup_register_callbacks();
 
     dx.activate();
 }
@@ -649,11 +687,11 @@ void manage_serial_line() {
 }
 
 void loop() {
-    track.treset();
-    while (!track.do_events()) {
-        manage_serial_line();
-        delay(1);
-    }
+//    track.treset();
+//    while (!track.do_events()) {
+//        manage_serial_line();
+//        delay(1);
+//    }
 }
 
 // vim: ts=4:sw=4:et:tw=80
