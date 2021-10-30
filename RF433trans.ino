@@ -188,8 +188,8 @@ SlaterAdf::SlaterAdf(byte len, const byte *arg_open_code,
         // tx is a static member, we need create it once.
     if (!tx) {
         tx = rfsend_builder(RfSendEncoding::MANCHESTER, PIN_RFOUT,
-                RFSEND_DEFAULT_CONVENTION, 8, nullptr, 5500, 0, 0, 0, 1150, 0,
-                0, 0, 0, 6900, 32);
+                RFSEND_DEFAULT_CONVENTION, 8, nullptr, 6900, 0, 0, 0, 1150, 0,
+                0, 0, 0, 5500, 32);
     }
 
     assert(tx);
