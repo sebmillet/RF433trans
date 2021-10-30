@@ -98,8 +98,8 @@ static void assert_failed(int line) {
 
 #define NOOP_BLINK
 
-#define SIMULATE_BUSY_TX
-#define SIMULATE_TX_SEND
+//#define SIMULATE_BUSY_TX
+//#define SIMULATE_TX_SEND
 
 
 // * ****** *
@@ -688,11 +688,9 @@ void manage_serial_line() {
 }
 
 void loop() {
-//    track.treset();
-//    while (!track.do_events()) {
-//        manage_serial_line();
-//        delay(1);
-//    }
+    rf.do_events();
+    manage_serial_line();
+    delay(1);
 }
 
 // vim: ts=4:sw=4:et:tw=80
