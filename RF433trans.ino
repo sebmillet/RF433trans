@@ -1,5 +1,5 @@
 /*
-  rf433trans.ino
+  RF433trans.ino
 
   Receives codes from a telecommand and sends codes to other telecommands.
   - Receives from an RF 433 Mhz receiver.
@@ -15,12 +15,12 @@
 /*
   Copyright 2021 Sébastien Millet
 
-  `rf433trans.ino' is free software: you can redistribute it and/or modify
+  `RF433trans.ino' is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  `rf433trans.ino' is distributed in the hope that it will be useful,
+  `RF433trans.ino' is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -212,7 +212,8 @@ void SlaterAdf::action_child(byte what) {
     unsigned long d = t - last_millis;
     last_millis = t;
 
-    serial_printf("t = %lu, d = %lu, last_what = %d, what = %d\n", t, d, last_what, what);
+    serial_printf("t = %lu, d = %lu, last_what = %d, what = %d\n",
+            t, d, last_what, what);
 
     if (last_what != SLATER_WHAT_UNDEF && d >= SLATERADF_MIN_DELAY_PARTIAL
             && d <= SLATERADF_MAX_DELAY_PARTIAL) {
