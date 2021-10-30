@@ -47,7 +47,7 @@
 
     // When we receive a signal on OTIO, we wait a bit before executing
     // subsequent orders. Unit is milli-seconds.
-#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 500
+#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 1500
 
     // If we got to defer signal sending because TX is already busy, how long
     // shall we wait? (in milli-seconds)
