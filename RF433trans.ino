@@ -29,7 +29,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses>.
 */
 
-//#define DEBUG
+#define DEBUG
 
 #define PIN_RFINPUT  2
 #define INT_RFINPUT  0
@@ -38,6 +38,20 @@
   // Comment the below line if you don't want a LED to show RF transmission is
   // underway.
 #define PIN_LED      LED_BUILTIN
+
+//#define SIMULATE_BUSY_TX
+#define SIMULATE_TX_SEND
+
+    // Should we blink when a noop() instruction is received no the serial line?
+#define NOOP_BLINK
+
+    // When we receive a signal on OTIO, we wait a bit before executing
+    // subsequent orders. Unit is milli-seconds.
+#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 500
+
+    // If we got to defer signal sending because TX is already busy, how long
+    // shall we wait? (in milli-seconds)
+#define DELAY_WHEN_TX_IS_BUSY 100
 
 #include "RF433recv.h"
 #include "RF433send.h"
@@ -95,11 +109,6 @@ static void assert_failed(int line) {
 }
 
 #define ARRAYSZ(a) (sizeof(a) / sizeof(*a))
-
-#define NOOP_BLINK
-
-//#define SIMULATE_BUSY_TX
-//#define SIMULATE_TX_SEND
 
 
 // * ****** *
@@ -329,14 +338,14 @@ SlaterAdf *sl3 = new SlaterAdf(ARRAYSZ(sl3_open_code),
         sl3_open_code, sl3_close_code);
 
 const id_sched_t all_open[] = {
-    0,    ID_SL1_OPEN,
+       0, ID_SL1_OPEN,
     2000, ID_SL2_OPEN,
     2000, ID_SL3_OPEN
 };
 SlaterMeta *sla_open = new SlaterMeta(ARRAYSZ(all_open), all_open);
 
 const id_sched_t all_close[] = {
-    0,    ID_SL1_CLOSE,
+       0, ID_SL1_CLOSE,
     2000, ID_SL2_CLOSE_PARTIAL,
     2000, ID_SL3_CLOSE
 };
@@ -358,43 +367,16 @@ code_t slater_codes[] = {
 
 void telecommand_otio_up(const BitVector *recorded) {
     serial_printf("call of telecommand_otio_up()\n");
-    tx_by_id(&dummy + ID_SLA_OPEN);
+
+    void *data = &dummy + ID_SLA_OPEN;
+    dx.set_task(OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION, tx_by_id, data, false);
 }
 
 void telecommand_otio_down(const BitVector *recorded) {
     serial_printf("call of telecommand_otio_down()\n");
-    tx_by_id(&dummy + ID_SLA_CLOSE);
-}
 
-//void rf_recv_callback(void *data);
-void setup_register_callbacks() {
-//    track.register_callback(RF433ANY_ID_TRIBIT,
-//            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00),
-//            (void *)(&dummy + 1), rf_recv_callback, 2000);
-//    track.register_callback(RF433ANY_ID_TRIBIT,
-//            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00),
-//            (void *)(&dummy + 2), rf_recv_callback, 2000);
-
-
-        // OTIO (no rolling code, 32-bit)
-    rf.register_Receiver(
-        RFMOD_TRIBIT, // mod
-         6976, // initseq
-            0, // lo_prefix
-            0, // hi_prefix
-            0, // first_lo_ign
-          562, // lo_short
-         1258, // lo_long
-            0, // hi_short (0 => take lo_short)
-            0, // hi_long  (0 => take lo_long)
-          528, // lo_last
-         6996, // sep
-           32  // nb_bits
-    );
-    rf.register_callback(telecommand_otio_up, 2000,
-            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
-    rf.register_callback(telecommand_otio_down, 2000,
-            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00));
+    void *data = &dummy + ID_SLA_CLOSE;
+    dx.set_task(OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION, tx_by_id, data, false);
 }
 
 
@@ -449,7 +431,7 @@ void tx_by_id(void *data) {
     }
 
     if (!tx_set_busy()) {
-        dx.set_task(100, tx_by_id, data, false);
+        dx.set_task(DELAY_WHEN_TX_IS_BUSY, tx_by_id, data, false);
         serial_printf("Exec deferred by 100ms\n");
     } else {
         code_t *psc = &slater_codes[idx];
@@ -491,23 +473,6 @@ void turn_led_off() {
 #ifdef PIN_LED
     digitalWrite(PIN_LED, LOW);
 #endif
-}
-
-void setup() {
-    Serial.begin(SERIAL_SPEED_INTEGER);
-    Serial.print("Start\n");
-
-    pinMode(PIN_RFINPUT, INPUT);
-    turn_led_off();
-
-//    tx_flo = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
-//            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
-//            1300, 0, 0, 0, 24000, 12);
-
-//    track.setopt_wait_free_433_before_calling_callbacks(true);
-    setup_register_callbacks();
-
-    dx.activate();
 }
 
 void noop() {
@@ -685,6 +650,46 @@ void manage_serial_line() {
             }
         }
     }
+}
+
+void setup() {
+    Serial.begin(SERIAL_SPEED_INTEGER);
+    Serial.print("Start\n");
+
+    pinMode(PIN_RFINPUT, INPUT);
+    turn_led_off();
+
+//    tx_flo = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
+//            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
+//            1300, 0, 0, 0, 24000, 12);
+
+//    track.setopt_wait_free_433_before_calling_callbacks(true);
+
+    rf.register_Receiver(
+        RFMOD_TRIBIT, // mod
+         6976, // initseq
+            0, // lo_prefix
+            0, // hi_prefix
+            0, // first_lo_ign
+          562, // lo_short
+         1258, // lo_long
+            0, // hi_short (0 => take lo_short)
+            0, // hi_long  (0 => take lo_long)
+          528, // lo_last
+         6996, // sep
+           32  // nb_bits
+    );
+    rf.register_callback(telecommand_otio_up, 2000,
+            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00));
+    rf.register_callback(telecommand_otio_down, 2000,
+            new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
+
+    rf.set_opt_wait_free_433(true);
+    rf.activate_interrupts_handler(); // RF reception will work and execute
+                                      // callbacks upon corresponding code
+                                      // reception.
+
+    dx.activate();                    // Start DelayExec continual interrupts
 }
 
 void loop() {
