@@ -53,6 +53,8 @@
     // shall we wait? (in milli-seconds)
 #define DELAY_WHEN_TX_IS_BUSY 100
 
+#define SLATER_ADF_NB_SEND_REPEAT 1
+
 #include "RF433recv.h"
 #include "RF433send.h"
 #include "DelayExec.h"
@@ -251,7 +253,16 @@ void SlaterAdf::action_child(byte what) {
 #ifdef SIMULATE_TX_SEND
     simulate_tx_send(SLATERADF_LEN, pcode);
 #else
-    tx->send(SLATERADF_LEN, pcode);
+    for (byte i = 0; i < SLATER_ADF_NB_SEND_REPEAT; ++i) {
+        byte n = tx->send(SLATERADF_LEN, pcode);
+
+        Serial.print(F("Sent "));    // FIXME
+        Serial.print(n);             // FIXME
+        Serial.print(F(" times\n")); // FIXME
+
+        if (i < SLATER_ADF_NB_SEND_REPEAT - 1)
+            delay(200);
+    }
 #endif
 }
 
