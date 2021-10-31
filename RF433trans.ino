@@ -327,7 +327,7 @@ SlaterFlo::SlaterFlo(byte len, const byte *arg_open_code,
         // tx is a static member, we need create it once.
     if (!tx) {
         tx = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
-                RFSEND_DEFAULT_CONVENTION, 0, nullptr, 24000, 0, 0, 650, 650,
+                RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
                 1300, 0, 0, 0, 24000, 12);
     }
 
@@ -417,14 +417,16 @@ SlaterFlo *sl4 = new SlaterFlo(ARRAYSZ(sl4_open_code),
 const id_sched_t all_open[] = {
        0, ID_SL1_OPEN,
     2000, ID_SL2_OPEN,
-    2000, ID_SL3_OPEN
+    2000, ID_SL3_OPEN,
+    2000, ID_SL4_OPEN
 };
 SlaterMeta *sla_open = new SlaterMeta(ARRAYSZ(all_open), all_open);
 
 const id_sched_t all_close[] = {
        0, ID_SL1_CLOSE,
     2000, ID_SL2_CLOSE,
-    2000, ID_SL3_CLOSE
+    2000, ID_SL3_CLOSE,
+    2000, ID_SL4_CLOSE
 };
 SlaterMeta *sla_close = new SlaterMeta(ARRAYSZ(all_close), all_close);
 
