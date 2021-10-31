@@ -42,7 +42,7 @@
 //#define SIMULATE_BUSY_TX
 //#define SIMULATE_TX_SEND
 
-    // Should we blink when a noop() instruction is received no the serial line?
+    // Should we blink when a noop() instruction is received on the serial line?
 #define NOOP_BLINK
 
     // When we receive a signal on OTIO, we wait a bit before executing
@@ -252,6 +252,7 @@ void SlaterAdf::action_child(byte what) {
     simulate_tx_send(SLATERADF_LEN, pcode);
 #else
     byte n = tx->send(SLATERADF_LEN, pcode);
+    (void)n; // To turn off warning when debugging is off
     serial_printf("Sent %d time(s)\n", n);
 #endif
 }
