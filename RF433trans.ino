@@ -142,6 +142,23 @@ void Slater::action(byte what) {
     status = (what == SLATER_WHAT_OPEN ? SLATER_IS_OPEN : SLATER_IS_CLOSED);
 }
 
+#ifdef SIMULATE_TX_SEND
+static int simulate_tx_send(byte len, const byte *data) {
+    serial_printf("tx(%d):", len);
+    for (byte i = 0; i < len; ++i) {
+        serial_printf(" %02X", data[i]);
+    }
+    serial_printf("\n");
+
+        // FIXME
+    Serial.print("tx(");
+    Serial.print(len);
+    Serial.print(")\n");
+
+    return 1;
+}
+#endif
+
 
 // * ********* *
 // * SLATERADF *
@@ -194,23 +211,6 @@ SlaterAdf::SlaterAdf(byte len, const byte *arg_open_code,
 
     assert(tx);
 }
-
-#ifdef SIMULATE_TX_SEND
-int simulate_tx_send(byte len, const byte *data) {
-    serial_printf("tx(%d):", len);
-    for (byte i = 0; i < len; ++i) {
-        serial_printf(" %02X", data[i]);
-    }
-    serial_printf("\n");
-
-        // FIXME
-    Serial.print("tx(");
-    Serial.print(len);
-    Serial.print(")\n");
-
-    return 1;
-}
-#endif
 
 void SlaterAdf::action_child(byte what) {
     const byte *pcode =
@@ -293,6 +293,70 @@ void SlaterMeta::action_child(byte what) {
 }
 
 
+// * ********* *
+// * SLATERFLO *
+// * ********* *
+
+#define SLATERFLO_LEN                   2
+class SlaterFlo : public Slater {
+    private:
+        static RfSend *tx;
+
+        const byte *open_code;
+        const byte *close_code;
+        const byte *stop_code;
+
+    protected:
+        virtual void action_child(byte what) override;
+
+    public:
+        SlaterFlo(byte len, const byte *arg_open_code,
+                const byte *arg_close_code, const byte *arg_stop_code);
+        virtual ~SlaterFlo() { }
+};
+
+RfSend *SlaterFlo::tx = nullptr;
+
+SlaterFlo::SlaterFlo(byte len, const byte *arg_open_code,
+        const byte *arg_close_code, const byte *arg_stop_code):
+        open_code(arg_open_code),
+        close_code(arg_close_code),
+        stop_code(arg_stop_code) {
+    assert(len == SLATERFLO_LEN);
+
+        // tx is a static member, we need create it once.
+    if (!tx) {
+        tx = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
+                RFSEND_DEFAULT_CONVENTION, 0, nullptr, 24000, 0, 0, 650, 650,
+                1300, 0, 0, 0, 24000, 12);
+    }
+
+    assert(tx);
+}
+
+void SlaterFlo::action_child(byte what) {
+    const byte *pcode;
+    if (what == SLATER_WHAT_OPEN)
+        pcode = open_code;
+    else if (what == SLATER_WHAT_CLOSE)
+        pcode = close_code;
+    else if (what == SLATER_WHAT_STOP)
+        pcode = stop_code;
+    else
+        assert(false);
+
+    serial_printf("SlaterFlo::action_child: what = %d\n", what);
+
+#ifdef SIMULATE_TX_SEND
+    simulate_tx_send(SLATERFLO_LEN, pcode);
+#else
+    byte n = tx->send(SLATERFLO_LEN, pcode);
+    (void)n; // To turn off warning when debugging is off
+    serial_printf("Sent %d time(s)\n", n);
+#endif
+}
+
+
 // * **************** *
 // * MY DEVICES CODES *
 // * **************** *
@@ -314,6 +378,7 @@ const byte sl1_open_code[] =  {0x40, 0xA2, 0xBB, 0xAE};
 #define ID_SL1_OPEN           10
 const byte sl1_close_code[] = {0x40, 0xA2, 0xBB, 0xAD};
 #define ID_SL1_CLOSE          15
+
     // Volet salle à manger
 const byte sl2_open_code[] =  {0x40, 0x03, 0x89, 0x4D};
 #define ID_SL2_OPEN           20
@@ -321,11 +386,20 @@ const byte sl2_open_code[] =  {0x40, 0x03, 0x89, 0x4D};
 const byte sl2_close_code[] = {0x40, 0x03, 0x89, 0x4E};
 #define ID_SL2_CLOSE          25
 #define ID_SL2_CLOSE_PARTIAL  26
+
     // Volet chambre
 const byte sl3_open_code[] =  {0x40, 0x78, 0x49, 0x5E};
 #define ID_SL3_OPEN           30
 const byte sl3_close_code[] = {0x40, 0x78, 0x49, 0x5D};
 #define ID_SL3_CLOSE          35
+
+    // Volet salle à manger numéro (latéral)
+const byte sl4_open_code[] =  { 0x05, 0xeb };
+#define ID_SL4_OPEN           40
+const byte sl4_close_code[] = { 0x06, 0xfc};
+#define ID_SL4_CLOSE          45
+const byte sl4_stop_code[] = { 0x02, 0xbf};
+#define ID_SL4_STOP           47
 
 #define ID_SLA_OPEN          100
 #define ID_SLA_CLOSE         101
@@ -336,6 +410,9 @@ SlaterAdf *sl2 = new SlaterAdf(ARRAYSZ(sl2_open_code),
         sl2_open_code, sl2_close_code);
 SlaterAdf *sl3 = new SlaterAdf(ARRAYSZ(sl3_open_code),
         sl3_open_code, sl3_close_code);
+
+SlaterFlo *sl4 = new SlaterFlo(ARRAYSZ(sl4_open_code),
+        sl4_open_code, sl4_close_code, sl4_stop_code);
 
 const id_sched_t all_open[] = {
        0, ID_SL1_OPEN,
@@ -361,6 +438,11 @@ code_t slater_codes[] = {
         16500, ID_SL2_STOP},
     {ID_SL3_OPEN,          sl3,       SLATER_WHAT_OPEN,  0, SLATER_WHAT_UNDEF},
     {ID_SL3_CLOSE,         sl3,       SLATER_WHAT_CLOSE, 0, SLATER_WHAT_UNDEF},
+
+    {ID_SL4_OPEN,          sl4,       SLATER_WHAT_OPEN,  0, SLATER_WHAT_UNDEF},
+    {ID_SL4_CLOSE,         sl4,       SLATER_WHAT_CLOSE, 0, SLATER_WHAT_UNDEF},
+    {ID_SL4_STOP,          sl4,       SLATER_WHAT_STOP,  0, SLATER_WHAT_UNDEF},
+
     {ID_SLA_OPEN,          sla_open,  SLATER_WHAT_UNDEF, 0, SLATER_WHAT_UNDEF},
     {ID_SLA_CLOSE,         sla_close, SLATER_WHAT_UNDEF, 0, SLATER_WHAT_UNDEF}
 };
