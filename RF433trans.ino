@@ -29,7 +29,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses>.
 */
 
-#define DEBUG
+//#define DEBUG
 
 #define PIN_RFINPUT  2
 #define INT_RFINPUT  0
@@ -40,14 +40,14 @@
 #define PIN_LED      LED_BUILTIN
 
 //#define SIMULATE_BUSY_TX
-#define SIMULATE_TX_SEND
+//#define SIMULATE_TX_SEND
 
     // Should we blink when a noop() instruction is received no the serial line?
 #define NOOP_BLINK
 
     // When we receive a signal on OTIO, we wait a bit before executing
     // subsequent orders. Unit is milli-seconds.
-#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 1500
+#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 2000
 
     // If we got to defer signal sending because TX is already busy, how long
     // shall we wait? (in milli-seconds)
@@ -304,8 +304,6 @@ struct code_t {
     byte delayed_action_id;
 };
 
-#define DELAY_AFTER_RF_RECV   1000
-
   // Input (codes received from Sonoff telecommand)
 //#define CODE_IN_BTN_HAUT     0x00b94d24
 //#define CODE_IN_BTN_BAS      0x00b94d22
@@ -450,19 +448,6 @@ void tx_by_id(void *data) {
 
     }
 }
-
-//void rf_recv_callback(void *data) {
-//    int n = (byte *)data - &dummy;
-//    assert(n == 1 || n == 2);
-
-//    serial_printf("call of rf_recv_callback(): n = %d\n", (int)n);
-//    delay(DELAY_AFTER_RF_RECV);
-//    if (n == 1) {
-//        tx_by_id(&dummy + ID_SLA_OPEN);
-//    } else if (n == 2) {
-//        tx_by_id(&dummy + ID_SLA_CLOSE);
-//    }
-//}
 
 void turn_led_on() {
 #ifdef PIN_LED
@@ -685,7 +670,7 @@ void setup() {
     rf.register_callback(telecommand_otio_down, 2000,
             new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
 
-    rf.set_opt_wait_free_433(true);
+//    rf.set_opt_wait_free_433(true);
     rf.activate_interrupts_handler(); // RF reception will work and execute
                                       // callbacks upon corresponding code
                                       // reception.
