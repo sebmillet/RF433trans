@@ -346,7 +346,7 @@ SlaterMeta *sla_open = new SlaterMeta(ARRAYSZ(all_open), all_open);
 
 const id_sched_t all_close[] = {
        0, ID_SL1_CLOSE,
-    2000, ID_SL2_CLOSE_PARTIAL,
+    2000, ID_SL2_CLOSE,
     2000, ID_SL3_CLOSE
 };
 SlaterMeta *sla_close = new SlaterMeta(ARRAYSZ(all_close), all_close);
