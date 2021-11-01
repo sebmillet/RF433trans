@@ -51,7 +51,7 @@
 
     // If we got to defer signal sending because TX is already busy, how long
     // shall we wait? (in milli-seconds)
-#define DELAY_WHEN_TX_IS_BUSY 100
+#define DELAY_WHEN_TX_IS_BUSY 100LU
 
 #include "RF433recv.h"
 #include "RF433send.h"
@@ -138,7 +138,9 @@ class Slater {
 };
 
 void Slater::action(byte what) {
+    dx.inactivate();
     action_child(what);
+    dx.activate();
     status = (what == SLATER_WHAT_OPEN ? SLATER_IS_OPEN : SLATER_IS_CLOSED);
 }
 
@@ -148,12 +150,7 @@ static int simulate_tx_send(byte len, const byte *data) {
     for (byte i = 0; i < len; ++i) {
         serial_printf(" %02X", data[i]);
     }
-    serial_printf("\n");
-
-        // FIXME
-    Serial.print("tx(");
-    Serial.print(len);
-    Serial.print(")\n");
+    serial_printf("\ntx(%d)\n", len);
 
     return 1;
 }
@@ -205,7 +202,7 @@ SlaterAdf::SlaterAdf(byte len, const byte *arg_open_code,
         // tx is a static member, we need create it once.
     if (!tx) {
         tx = rfsend_builder(RfSendEncoding::MANCHESTER, PIN_RFOUT,
-                RFSEND_DEFAULT_CONVENTION, 8, nullptr, 6900, 0, 0, 0, 1150, 0,
+                RFSEND_DEFAULT_CONVENTION, 8, nullptr, 20000, 0, 0, 0, 1150, 0,
                 0, 0, 0, 5500, 32);
     }
 
@@ -283,6 +280,7 @@ class SlaterMeta : public Slater {
 };
 
 void SlaterMeta::action_child(byte what) {
+    dx.delete_all_tasks();
     unsigned long cumul_delay = 0;
     for (byte i = 0; i < n; ++i) {
         const id_sched_t *psched = &sched[i];
@@ -516,7 +514,7 @@ void tx_by_id(void *data) {
 
     if (!tx_set_busy()) {
         dx.set_task(DELAY_WHEN_TX_IS_BUSY, tx_by_id, data, false);
-        serial_printf("Exec deferred by 100ms\n");
+        serial_printf("Exec deferred by %lums\n", DELAY_WHEN_TX_IS_BUSY);
     } else {
         code_t *psc = &slater_codes[idx];
         (psc->sl)->action(psc->what);
@@ -730,26 +728,11 @@ void setup() {
     pinMode(PIN_RFINPUT, INPUT);
     turn_led_off();
 
-//    tx_flo = rfsend_builder(RfSendEncoding::TRIBIT_INVERTED, PIN_RFOUT,
-//            RFSEND_DEFAULT_CONVENTION, 8, nullptr, 24000, 0, 0, 650, 650,
-//            1300, 0, 0, 0, 24000, 12);
-
 //    track.setopt_wait_free_433_before_calling_callbacks(true);
 
-    rf.register_Receiver(
-        RFMOD_TRIBIT, // mod
-         6976, // initseq
-            0, // lo_prefix
-            0, // hi_prefix
-            0, // first_lo_ign
-          562, // lo_short
-         1258, // lo_long
-            0, // hi_short (0 => take lo_short)
-            0, // hi_long  (0 => take lo_long)
-          528, // lo_last
-         6996, // sep
-           32  // nb_bits
-    );
+        // OTIO
+    rf.register_Receiver( RFMOD_TRIBIT,
+            6976, 0, 0, 0, 562, 1258, 0, 0, 528, 6996, 32);
     rf.register_callback(telecommand_otio_up, 2000,
             new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
     rf.register_callback(telecommand_otio_down, 2000,
