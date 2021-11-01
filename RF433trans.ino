@@ -29,7 +29,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses>.
 */
 
-#define DEBUG
+//#define DEBUG
 
 #define PIN_RFINPUT  2
 #define INT_RFINPUT  0
@@ -40,7 +40,7 @@
 #define PIN_LED      LED_BUILTIN
 
 //#define SIMULATE_BUSY_TX
-#define SIMULATE_TX_SEND
+//#define SIMULATE_TX_SEND
 
     // Should we blink when a noop() instruction is received on the serial line?
 #define NOOP_BLINK
@@ -723,12 +723,10 @@ void manage_serial_line() {
 
 void setup() {
     Serial.begin(SERIAL_SPEED_INTEGER);
-    Serial.print("Start\n");
+    serial_printf("Start\n");
 
     pinMode(PIN_RFINPUT, INPUT);
     turn_led_off();
-
-//    track.setopt_wait_free_433_before_calling_callbacks(true);
 
         // OTIO
     rf.register_Receiver( RFMOD_TRIBIT,
