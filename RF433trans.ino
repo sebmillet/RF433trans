@@ -29,7 +29,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses>.
 */
 
-//#define DEBUG
+#define DEBUG
 
 #define PIN_RFINPUT  2
 #define INT_RFINPUT  0
@@ -40,7 +40,7 @@
 #define PIN_LED      LED_BUILTIN
 
 //#define SIMULATE_BUSY_TX
-//#define SIMULATE_TX_SEND
+#define SIMULATE_TX_SEND
 
     // Should we blink when a noop() instruction is received on the serial line?
 #define NOOP_BLINK
@@ -172,7 +172,7 @@ static int simulate_tx_send(byte len, const byte *data) {
     // seconds) is also necessary to ignore two commands received in a short
     // period of time, most often, due to Radio-Frequency signal duplication.
 #define SLATERADF_MAX_DELAY_PARTIAL 30000
-#define SLATERADF_MIN_DELAY_PARTIAL 2000
+#define SLATERADF_MIN_DELAY_PARTIAL  2000
 class SlaterAdf : public Slater {
     private:
         static RfSend *tx;
@@ -297,7 +297,7 @@ void SlaterMeta::action_child(byte what) {
 // * SLATERFLO *
 // * ********* *
 
-#define SLATERFLO_LEN                   2
+#define SLATERFLO_LEN 2
 class SlaterFlo : public Slater {
     private:
         static RfSend *tx;
@@ -751,9 +751,9 @@ void setup() {
            32  // nb_bits
     );
     rf.register_callback(telecommand_otio_up, 2000,
-            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00));
-    rf.register_callback(telecommand_otio_down, 2000,
             new BitVector(32, 4, 0xb5, 0x35, 0x6d, 0x00));
+    rf.register_callback(telecommand_otio_down, 2000,
+            new BitVector(32, 4, 0xb9, 0x35, 0x6d, 0x00));
 
 //    rf.set_opt_wait_free_433(true);
     rf.activate_interrupts_handler(); // RF reception will work and execute
