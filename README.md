@@ -24,5 +24,7 @@ Requires to install 2 libraries in the Arduino environment:
 
 1. RF433send, available here: https://github.com/sebmillet/rf433send
 
-2. RF433any, available here: https://github.com/sebmillet/RF433any
+2. RF433recv, available here: https://github.com/sebmillet/RF433recv
+
+3. DelayExec, available here: https://github.com/sebmillet/DelayExec
 

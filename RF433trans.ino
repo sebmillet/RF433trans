@@ -100,7 +100,7 @@ static void serial_printf(const char *fmt, ...) {
 
 static void assert_failed(int line) {
 #ifdef ASSERT_OUTPUT_TO_SERIAL
-    Serial.print("\ntest.ino:");
+    Serial.print("\nRF433trans.ino:");
     Serial.print(line);
     Serial.println(": assertion failed, aborted.");
 #endif
@@ -139,7 +139,9 @@ class Slater {
 
 void Slater::action(byte what) {
     dx.inactivate();
+    rf.inactivate_interrupts_handler();
     action_child(what);
+    rf.activate_interrupts_handler();
     dx.activate();
     status = (what == SLATER_WHAT_OPEN ? SLATER_IS_OPEN : SLATER_IS_CLOSED);
 }
@@ -701,15 +703,14 @@ void setup() {
         // OTIO
     rf.register_Receiver( RFMOD_TRIBIT,
             6976, 0, 0, 0, 562, 1258, 0, 0, 528, 6996, 32);
-
+    // Setup callbacks on rf object, for certain codes received
+    // Is put in a separate file so that it is easy to switch neutral/real codes
+    // using different files, thus hiding real codes when committing on github.
+    // Real codes are typically found in the 'local' folder.
 #include "codes-received.h"
 
-//    rf.set_opt_wait_free_433(true);
-    rf.activate_interrupts_handler(); // RF reception will work and execute
-                                      // callbacks upon corresponding code
-                                      // reception.
-
-    dx.activate();                    // Start DelayExec continual interrupts
+    rf.activate_interrupts_handler();
+    dx.activate();
 }
 
 void loop() {

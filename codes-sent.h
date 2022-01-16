@@ -20,7 +20,7 @@ const byte sl3_open_code[] =  {0xB2, 0xB3, 0xB4, 0xB5};
 const byte sl3_close_code[] = {0xB6, 0xB7, 0xB8, 0xB9};
 #define ID_SL3_CLOSE          35
 
-    // Volet salle à manger numéro (latéral)
+    // Volet salle à manger numéro 2 (latéral)
 const byte sl4_open_code[] =  {0xBA, 0xBB};
 #define ID_SL4_OPEN           40
 const byte sl4_close_code[] = {0xBC, 0xBD};
