@@ -45,9 +45,13 @@
     // Should we blink when a noop() instruction is received on the serial line?
 #define NOOP_BLINK
 
-    // When we receive a signal on OTIO, we wait a bit before executing
+    // When we receive a signal from OTIO, we wait a bit before executing
     // subsequent orders. Unit is milli-seconds.
-#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 2000
+#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 750
+
+    // When we receive a signal from FLO/R, we wait a bit before executing
+    // subsequent orders. Unit is milli-seconds.
+#define FLOR_DELAY_TO_EXECUTE_AFTER_RECEPTION 750
 
     // If we got to defer signal sending because TX is already busy, how long
     // shall we wait? (in milli-seconds)
@@ -433,6 +437,40 @@ void telecommand_otio_down(const BitVector *recorded) {
     dx.set_task(OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION, tx_by_id, data, false);
 }
 
+void telecommand_flor_up() {
+    serial_printf("call of telecommand_flor_up()\n");
+
+    void *data = &dummy + ID_SL4_OPEN;
+    dx.set_task(FLOR_DELAY_TO_EXECUTE_AFTER_RECEPTION, tx_by_id, data, false);
+}
+
+void telecommand_flor_down() {
+    serial_printf("call of telecommand_flor_down()\n");
+
+    void *data = &dummy + ID_SL4_CLOSE;
+    dx.set_task(FLOR_DELAY_TO_EXECUTE_AFTER_RECEPTION, tx_by_id, data, false);
+}
+
+void callback_telecommand_flor_any(const BitVector *recorded) {
+
+        // Defensive programming
+        // register_Receiver() sets the number of bits to 72, so we should
+        // always have 72 bits when entering here.
+    if (recorded->get_nb_bits() != 72)
+        return;
+
+        // See 05_rollingcode.ino of RF433recv library to see an explanation of
+        // why we do these checks.
+    byte first_half_byte = (recorded->get_nth_byte(8) & 0xF0) >> 4;
+    byte my_eigth = (recorded->get_nth_byte(2) & 0x0F);
+
+    if (my_eigth != 8)
+        return;
+    if (first_half_byte == 1)
+        telecommand_flor_up();
+    else if (first_half_byte == 2)
+        telecommand_flor_down();
+}
 
 // * **** *
 // * CODE *
@@ -701,13 +739,16 @@ void setup() {
     turn_led_off();
 
         // OTIO
-    rf.register_Receiver( RFMOD_TRIBIT,
-            6976, 0, 0, 0, 562, 1258, 0, 0, 528, 6996, 32);
+    rf.register_Receiver(RFMOD_TRIBIT, 6976, 0, 0, 0, 562, 1258, 0, 0, 528,
+            6996, 32);
     // Setup callbacks on rf object, for certain codes received
     // Is put in a separate file so that it is easy to switch neutral/real codes
     // using different files, thus hiding real codes when committing on github.
     // Real codes are typically found in the 'local' folder.
 #include "codes-received.h"
+
+    rf.register_Receiver(RFMOD_TRIBIT, 18000, 1450, 1450, 0, 450, 900, 0, 0,
+            1400, 18000, 72, callback_telecommand_flor_any, 2000);
 
     rf.activate_interrupts_handler();
     dx.activate();
