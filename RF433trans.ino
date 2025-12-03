@@ -13,7 +13,7 @@
 */
 
 /*
-  Copyright 2021 Sébastien Millet
+  Copyright 2021, 2025 Sébastien Millet
 
   `RF433trans.ino' is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -47,15 +47,15 @@
 
     // When we receive a signal from OTIO, we wait a bit before executing
     // subsequent orders. Unit is milli-seconds.
-#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 750
+#define OTIO_DELAY_TO_EXECUTE_AFTER_RECEPTION 1500
 
     // When we receive a signal from FLO/R, we wait a bit before executing
     // subsequent orders. Unit is milli-seconds.
-#define FLOR_DELAY_TO_EXECUTE_AFTER_RECEPTION 750
+#define FLOR_DELAY_TO_EXECUTE_AFTER_RECEPTION 1500
 
     // If we got to defer signal sending because TX is already busy, how long
     // shall we wait? (in milli-seconds)
-#define DELAY_WHEN_TX_IS_BUSY 100LU
+#define DELAY_WHEN_TX_IS_BUSY 500LU
 
 #include "RF433recv.h"
 #include "RF433send.h"
@@ -390,17 +390,23 @@ SlaterFlo *sl4 = new SlaterFlo(ARRAYSZ(sl4_open_code),
 
 const id_sched_t all_open[] = {
        0, ID_SL1_OPEN,
-    2000, ID_SL2_OPEN,
-    2000, ID_SL3_OPEN,
-    2000, ID_SL4_OPEN
+    3000, ID_SL2_OPEN,
+    3000, ID_SL3_OPEN,
+    3000, ID_SL4_OPEN,
+    3000, ID_SL1_OPEN,
+    3000, ID_SL2_OPEN,
+    3000, ID_SL3_OPEN
 };
 SlaterMeta *sla_open = new SlaterMeta(ARRAYSZ(all_open), all_open);
 
 const id_sched_t all_close[] = {
        0, ID_SL1_CLOSE,
-    2000, ID_SL2_CLOSE,
-    2000, ID_SL3_CLOSE,
-    2000, ID_SL4_CLOSE
+    3000, ID_SL2_CLOSE,
+    3000, ID_SL3_CLOSE,
+    3000, ID_SL4_CLOSE,
+    3000, ID_SL1_CLOSE,
+    3000, ID_SL2_CLOSE,
+    3000, ID_SL3_CLOSE
 };
 SlaterMeta *sla_close = new SlaterMeta(ARRAYSZ(all_close), all_close);
 
